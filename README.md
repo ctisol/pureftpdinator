@@ -1,4 +1,4 @@
-pure-ftpdinator
+pureftpdinator
 ============
 
 Opinionatedly Deploy Pure-FTPd using Capistrano and Docker

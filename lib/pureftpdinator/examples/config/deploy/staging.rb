@@ -1,4 +1,4 @@
-##### pure-ftpdinator
+##### pureftpdinator
 ### ------------------------------------------------------------------
 set  :domain,                         "my-app-staging.example.com"
 server fetch(:domain),
