@@ -8,9 +8,13 @@ namespace :pureftpd do
   task :setup => ['deployinator:load_settings', 'pureftpdinator:deployment_user', :open_firewall, :ensure_ftp_user, :ensure_ssl_cert] do
     on roles(:app) do |host|
       as :root do
+        execute "mkdir", "-p", fetch(:pureftpd_socket_dir)
+        execute "chown", "#{fetch(:pureftpd_username)}:#{fetch(:pureftpd_username)}", fetch(:pureftpd_socket_dir)
+        execute "chmod", "770", fetch(:pureftpd_socket_dir)
         name = fetch(:pureauthd_container_name)
         unless container_exists?(name)
           pureauthd_run(host)
+          check_stayed_running(name)
         else
           unless container_is_running?(name)
             start_container(name)
@@ -21,6 +25,7 @@ namespace :pureftpd do
         name = fetch(:pureftpd_container_name)
         unless container_exists?(name)
           pureftpd_run(host)
+          check_stayed_running(name)
         else
           unless container_is_running?(name)
             start_container(name)
@@ -95,24 +100,26 @@ namespace :pureftpd do
     require 'erb'
     on roles(:app) do
       as :root do
+        cert_file = fetch(:pureftpd_external_cert_file)
         if ["1", "2", "3"].include? fetch(:pureftpd_tls_mode)
-          execute "mkdir", "-p", File.dirname(fetch(:pureftpd_external_cert_file))
+          execute "mkdir", "-p", fetch(:pureftpd_config_dir)
+          execute "chown", "#{fetch(:pureftpd_username)}:#{fetch(:pureftpd_username)}", fetch(:pureftpd_config_dir)
+          generated_config_file = ""
           ["ssl.key", "ssl.crt"].each do |file|
             template_path = File.expand_path("#{fetch(:pureftpd_templates_path)}/#{file}.erb")
-            generated_config_file ||= ""
             generated_config_file += ERB.new(File.new(template_path).read).result(binding)
           end
           temp_file = "/tmp/temp.file"
           upload! StringIO.new(generated_config_file), temp_file
-          unless test "diff", "-q", temp_file, fetch(:pureftpd_external_cert_file)
-            warn "Config file #{config_file} on #{fetch(:domain)} is being updated."
-            execute "mv", temp_file, fetch(:pureftpd_external_cert_file)
+          unless test "diff", "-q", temp_file, cert_file
+            warn "Config file #{cert_file} on #{fetch(:domain)} is being updated."
+            execute "mv", temp_file, cert_file
             set :pureftpd_config_file_changed, true
           else
             execute "rm", temp_file
           end
-          execute "chown", "-R", "root:root", File.dirname(fetch(:pureftpd_external_cert_file))
-          execute "chmod", "600", fetch(:pureftpd_external_cert_file)
+          execute "chown", "root:root", cert_file
+          execute "chmod", "600", cert_file
         end
       end
     end
@@ -122,10 +129,17 @@ namespace :pureftpd do
     on roles(:app) do
       as :root do
         name = fetch(:pureftpd_username)
-        unix_user_add(name) unless unix_user_exists?(name)
+        unless unix_user_exists?(name)
+          execute "adduser", "--disabled-password", "--gecos", "\"\"", "--shell", "/bin/false", name
+        end
+        unless fetch(:webserver_username).nil?
+          if unix_user_exists?(fetch(:webserver_username))
+            execute "usermod", "-a", "-G", fetch(:pureftpd_username), fetch(:webserver_username)
+          end
+        end
         execute "mkdir", "-p", "/home/#{name}"
         execute "chown", "#{name}:#{name}", "/home/#{name}"
-        execute "chmod", "750", "/home/#{name}"
+        execute "chmod", "755", "/home/#{name}"
       end
     end
   end

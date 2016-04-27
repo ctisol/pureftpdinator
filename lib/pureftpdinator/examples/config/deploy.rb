@@ -6,7 +6,7 @@ lock '3.2.1'
 set :application,                     'my_app_name'
 set :preexisting_ssh_user,            ENV['USER']
 set :deployment_username,             "deployer" # user with SSH access and passwordless sudo rights
-set :ignore_permissions_dirs,         [fetch(:pureftpd_config_path)]
+set :ignore_permissions_dirs,         [fetch(:pureftpd_config_dir)]
 set :pureftpd_username,               "ftpuser"
 # TODO confirm 990 is the right port for TLS
 set :pureftpd_connection_ports,       ["21", "990"] # ports 21, 990, etc
